@@ -686,22 +686,51 @@ module Tag_Parser : TAG_PARSER = struct
         | params, ScmSymbol opt ->
            ScmLambda(unsymbolify_vars params, Opt opt, expr)
         | _ -> raise (X_syntax "invalid parameter list"))
-    | ScmPair (ScmSymbol "let", ScmPair (ribs, exprs)) ->
-       raise X_not_yet_implemented
+    | ScmPair (ScmSymbol "let", ScmPair (ribs, exprs)) -> 
+      let vars_vals_list = match (scheme_list_to_ocaml ribs) with
+                            | ribs_list, ScmNil -> ribs_list
+                            | _ -> raise (X_syntax "improper list") in
+      let vars = List.map (fun v -> match v with
+                            |ScmPair(var, _) -> var
+                            |_ -> raise (X_syntax "invalid let expression"))
+                            vars_vals_list in 
+      let vals = List.map (fun v -> match v with
+                            |ScmPair(_, value) -> value
+                            |_ -> raise (X_syntax "invalid let expression"))
+                            vars_vals_list in
+      tag_parse (ScmPair(ScmPair(ScmSymbol("lambda"), ScmPair((scheme_sexpr_list_of_sexpr_list vars), exprs)), (scheme_sexpr_list_of_sexpr_list vals)))
     | ScmPair (ScmSymbol "let*", ScmPair (ScmNil, exprs)) ->
-       raise X_not_yet_implemented
+      tag_parse (ScmPair(ScmSymbol("let"), ScmPair(ScmNil, exprs)))
     | ScmPair (ScmSymbol "let*",
                ScmPair
                  (ScmPair
                     (ScmPair (var, ScmPair (value, ScmNil)), ScmNil),
-                  exprs)) -> raise X_not_yet_implemented
+                  exprs)) -> tag_parse (ScmPair(ScmSymbol("let"), ScmPair(ScmPair(ScmPair(var, ScmPair(value, ScmNil)), ScmNil), exprs)))
     | ScmPair (ScmSymbol "let*",
                ScmPair (ScmPair (ScmPair (var,
                                           ScmPair (arg, ScmNil)),
                                  ribs),
-                        exprs)) -> raise X_not_yet_implemented
+                        exprs)) -> tag_parse (ScmPair(ScmSymbol("let"), ScmPair(ScmPair(ScmPair(var, ScmPair(arg, ScmNil)), ScmNil), 
+                                                            ScmPair(ScmPair(ScmSymbol("let*"), ScmPair(ribs, exprs)), ScmNil))))
     | ScmPair (ScmSymbol "letrec", ScmPair (ribs, exprs)) ->
-       raise X_not_yet_implemented
+       let vars_vals_list = match (scheme_list_to_ocaml ribs) with
+                                    |ribs_list, ScmNil -> ribs_list
+                                    | _ -> raise (X_syntax "improper list") in 
+       let vars = List.map (fun v -> match v with 
+                                    |ScmPair(var, _) -> var
+                                    |_ -> raise (X_syntax "invalid letrec expression"))
+                            vars_vals_list in 
+      let declaration_vars = List.map (fun var -> ScmPair(var, ScmPair(ScmPair(ScmSymbol("quote"), ScmPair(ScmSymbol("temp"), ScmNil)), ScmNil))) vars in 
+      let vals = List.map (fun v -> match v with
+                                    | ScmPair(_, ScmPair(value, _)) -> value
+                                    | _ -> raise (X_syntax "invalid letrec expression")) vars_vals_list in 
+      let set_args = List.combine vars vals in 
+      let set_args =  List.map (fun (var, value) -> ScmPair(ScmSymbol("set!"), ScmPair(var, ScmPair(value, ScmNil)))) set_args in
+      let exprs = match (scheme_list_to_ocaml exprs) with
+                  |exprs_list, ScmNil -> exprs_list
+                  | _ -> raise (X_syntax "improper list") in
+      let body = List.append set_args exprs  in
+      tag_parse (ScmPair(ScmSymbol("let"), ScmPair((scheme_sexpr_list_of_sexpr_list declaration_vars), (scheme_sexpr_list_of_sexpr_list body))))
     | ScmPair (ScmSymbol "and", ScmNil) -> ScmConst(ScmBoolean(true))
     | ScmPair (ScmSymbol "and", exprs) ->
        (match (scheme_list_to_ocaml exprs) with
