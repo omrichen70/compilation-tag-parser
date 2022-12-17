@@ -1053,12 +1053,17 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
   let should_box_var name expr params = 
     let (read_lst, write_lst) = find_reads_and_writes name expr params in 
     let cross_read_write = cross_product read_lst write_lst in 
-    let cross_read_write = List.filter (fun ((n_1, e1), (n_2, e2)) -> 
-                                          if(n_1 == n_2) then (
-                                          let ribs_pairs = cross_product e1 e2 in 
-                                          let filtered_ribs = List.filter (fun (rib1::rest1,rib2::rest2) -> (not (rib1 == rib2))) ribs_pairs in 
-                                          if(List.length filtered_ribs > 0) then true else false ) else false) cross_read_write in 
+    let cross_read_write = 
+      List.filter (fun ((Var'(n1,lex1),env1),(Var'(n2,lex2),env2)) -> 
+          match (lex1,lex2) with
+          | (Bound(_,_), Param _) -> true
+          | (Param _, Bound(_,_)) -> true
+          | (Bound(_,_), Bound(_,_)) -> 
+            let ribs_pairs = cross_product env1 env2 in 
+            let filtered_ribs = List.filter (fun (rib1,rib2) -> (rib1 == rib2)) ribs_pairs in
+            if(List.length filtered_ribs > 0) then false else true) cross_read_write in 
     if(List.length cross_read_write > 0) then true else false;;
+
 
   let box_sets_and_gets name body =
     let rec run expr =
@@ -1138,7 +1143,22 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
          | _, _ -> ScmSeq'(new_sets @ [new_body]) in
        ScmLambda' (params, Simple, new_body)
     | ScmLambda' (params, Opt opt, expr') ->
-      raise X_not_yet_implemented
+      let box_these =
+        List.filter
+          (fun param -> should_box_var param expr' params)
+          params in
+      let new_body = 
+        List.fold_left
+          (fun body name -> box_sets_and_gets name body)
+          (auto_box expr')
+          box_these in
+      let new_sets = make_sets box_these params in
+      let new_body = 
+        match box_these, new_body with
+        | [], _ -> new_body
+        | _, ScmSeq' exprs -> ScmSeq' (new_sets @ exprs)
+        | _, _ -> ScmSeq'(new_sets @ [new_body]) in
+      ScmLambda' (params, Opt opt, new_body)
     | ScmApplic' (proc, args, app_kind) ->
        ScmApplic' (auto_box proc, List.map auto_box args, app_kind);;
 
