@@ -1046,7 +1046,11 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
                      List.map (fun bj -> (ai, bj)) bs')
                    as');;
 
-  let should_box_var name expr params = raise X_not_yet_implemented;;
+  let should_box_var name expr params = 
+    let (read_lst, write_lst) = find_reads_and_writes name expr params in 
+    let cross_read_write = cross_product read_lst write_lst in 
+    let cartesian = List.filter (fun ((n_1, s_1 :: e_1), (n_2, s_2 :: e_2)) -> (not (n_1 == n_2)) || (not (e_1 = e_2))) cross_read_write in 
+    if(List.length cartesian > 0) then true else false;;
 
   let box_sets_and_gets name body =
     let rec run expr =
