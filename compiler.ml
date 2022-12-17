@@ -735,6 +735,12 @@ module Tag_Parser : TAG_PARSER = struct
                   | _ -> raise (X_syntax "improper list") in
       let body = List.append set_args exprs  in
       tag_parse (ScmPair(ScmSymbol("let"), ScmPair((scheme_sexpr_list_of_sexpr_list declaration_vars), (scheme_sexpr_list_of_sexpr_list body))))
+    | ScmPair(ScmSymbol "or", ScmNil) -> ScmConst(ScmBoolean(false))
+    | ScmPair(ScmSymbol "or", ScmPair(sexpr, ScmNil)) -> tag_parse sexpr
+    | ScmPair(ScmSymbol "or", sexprs) ->
+        (match (scheme_list_to_ocaml sexprs) with
+        | (sexprs_list, ScmNil) -> ScmOr(List.map tag_parse sexprs_list)
+        | _ -> raise (X_syntax "improper or sequence"))
     | ScmPair (ScmSymbol "and", ScmNil) -> ScmConst(ScmBoolean(true))
     | ScmPair (ScmSymbol "and", exprs) ->
        (match (scheme_list_to_ocaml exprs) with
