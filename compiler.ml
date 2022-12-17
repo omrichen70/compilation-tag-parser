@@ -928,9 +928,9 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
       | ScmConst sexpr -> ScmConst'(sexpr)
       | ScmVarGet (Var str) -> ScmVarGet'(tag_lexical_address_for_var str params env)
       | ScmIf (test, dit, dif) -> ScmIf'((run test params env), (run dit params env), (run dif params env))
-      | ScmSeq exprs -> ScmSeq'(List.map (fun expr -> run expr params env) exprs)
-      | ScmOr exprs -> ScmOr'(List.map(fun value -> run value params env) exprs)
-      | ScmVarSet(Var v, expr) -> ScmVarSet'((tag_lexical_address_for_var v params env), (run expr params env))
+      | ScmSeq exprs -> ScmSeq'((value -> (run value params env)) exprs)
+      | ScmVarSet(Var v, expr) -> ScmVarSet'(tag_lexList.map (fun expr -> run expr params env) exprs)
+      | ScmOr exprs -> ScmOr'(List.map(fun ical_address_for_var v params env), (run expr params env))
       (* this code does not [yet?] support nested define-expressions *)
       | ScmVarDef(Var v, expr) -> ScmVarDef'((tag_lexical_address_for_var v params env), (run expr params env))
       | ScmLambda (params', Simple, expr) -> ScmLambda'(params', Simple, (run expr params' (params::env)))
@@ -947,20 +947,20 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
   (* run this second *)
   let annotate_tail_calls = 
     let rec run in_tail = function
-      | (ScmConst' _) as orig -> raise X_not_yet_implemented
-      | (ScmVarGet' _) as orig -> raise X_not_yet_implemented
-      | ScmIf' (test, dit, dif) -> raise X_not_yet_implemented
-      | ScmSeq' [] -> raise X_not_yet_implemented
-      | ScmSeq' (expr :: exprs) -> raise X_not_yet_implemented
-      | ScmOr' [] -> raise X_not_yet_implemented
-      | ScmOr' (expr :: exprs) -> raise X_not_yet_implemented
-      | ScmVarSet' (var', expr') -> raise X_not_yet_implemented
-      | ScmVarDef' (var', expr') -> raise X_not_yet_implemented
-      | (ScmBox' _) as expr' -> raise X_not_yet_implemented
-      | (ScmBoxGet' _) as expr' -> raise X_not_yet_implemented
-      | ScmBoxSet' (var', expr') -> raise X_not_yet_implemented
-      | ScmLambda' (params, Simple, expr) -> raise X_not_yet_implemented
-      | ScmLambda' (params, Opt opt, expr) -> raise X_not_yet_implemented
+      | (ScmConst' _) as orig -> orig
+      | (ScmVarGet' _) as orig -> orig
+      | ScmIf' (test, dit, dif) -> ScmIf'((run test false) (run dit in_tail) (run dif in_tail))
+      | ScmSeq' [] -> []
+      | ScmSeq' (expr :: exprs) -> ScmSeq'((List.map(fun value -> (run value false)) expr)@[(run epxrs in_tail)])
+      | ScmOr' [] -> []
+      | ScmOr' (expr :: exprs) -> ScmOr'((List.map(fun value -> (run value false)) expr)@[(run epxrs in_tail)])
+      | ScmVarSet' (var', expr') -> ScmVarSet'(var', (run expr' false))
+      | ScmVarDef' (var', expr') -> ScmVarDef'(var', (run expr' false))
+      | (ScmBox' _) as expr' -> ScmBox'(run expr' false)
+      | (ScmBoxGet' _) as expr' -> ScmBoxGet'(run expr' false)
+      | ScmBoxSet' (var', expr') -> ScmBoxSet'(var, (run expr' false))
+      | ScmLambda' (params, Simple, expr) -> ScmLambda'(params, Simple, (run expr true))
+      | ScmLambda' (params, Opt opt, expr) -> ScmLambda'(params, Opt opt, (run expr true))
       | ScmApplic' (proc, args, app_kind) ->
          if in_tail
          then ScmApplic' (run false proc,
@@ -973,7 +973,7 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
       | [] -> [run in_tail expr]
       | expr' :: exprs -> (run false expr) :: (runl in_tail expr' exprs)
     in
-    fun expr' -> raise X_not_yet_implemented;;
+    fun expr' -> (run expr' false);;
 
   (* auto_box *)
 
