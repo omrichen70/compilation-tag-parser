@@ -1054,10 +1054,10 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
     let (read_lst, write_lst) = find_reads_and_writes name expr params in 
     let cross_read_write = cross_product read_lst write_lst in 
     let cross_read_write = List.filter (fun ((n_1, e1), (n_2, e2)) -> 
-                                                let ribs_pairs = cross_product e1 e2 in 
-                                                let filtered_ribs = List.filter (fun (rib1::rest1,rib2::rest2) -> (not (rib1 == rib2))) ribs_pairs in 
-                                                if(List.length filtered_ribs > 0) then true else false                                   
-      ) cross_read_write in 
+                                          if(n_1 == n_2) then (
+                                          let ribs_pairs = cross_product e1 e2 in 
+                                          let filtered_ribs = List.filter (fun (rib1::rest1,rib2::rest2) -> (not (rib1 == rib2))) ribs_pairs in 
+                                          if(List.length filtered_ribs > 0) then true else false ) else false) cross_read_write in 
     if(List.length cross_read_write > 0) then true else false;;
 
   let box_sets_and_gets name body =
