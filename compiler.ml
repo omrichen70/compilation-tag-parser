@@ -631,6 +631,17 @@ module Tag_Parser : TAG_PARSER = struct
                             ScmPair (remaining, ScmNil))))
     | _ -> raise (X_syntax "malformed cond-rib");;
 
+    let let_names_values =
+      let rec run = function
+        | ScmNil -> ([], [])
+        | ScmPair (ScmPair (name, ScmPair (value, ScmNil)), ribs) ->
+           let (names, values) = run ribs in
+           (name :: names, value :: values)
+        | _ -> raise (X_syntax "Invalid let-rib")
+      in run;;
+      
+    let scheme_list_of_ocaml_list =
+      List.fold_right (fun car cdr -> ScmPair (car, cdr));;
   let rec tag_parse sexpr =
     match sexpr with
     | ScmVoid | ScmBoolean _ | ScmChar _ | ScmString _ | ScmNumber _ ->
@@ -687,18 +698,11 @@ module Tag_Parser : TAG_PARSER = struct
            ScmLambda(unsymbolify_vars params, Opt opt, expr)
         | _ -> raise (X_syntax "invalid parameter list"))
     | ScmPair (ScmSymbol "let", ScmPair (ribs, exprs)) -> 
-      let vars_vals_list = match (scheme_list_to_ocaml ribs) with
-                            | ribs_list, ScmNil -> ribs_list
-                            | _ -> raise (X_syntax "improper list") in
-      let vars = List.map (fun v -> match v with
-                            |ScmPair(var, _) -> var
-                            |_ -> raise (X_syntax "invalid let expression"))
-                            vars_vals_list in 
-      let vals = List.map (fun v -> match v with
-                            |ScmPair(_, value) -> value
-                            |_ -> raise (X_syntax "invalid let expression"))
-                            vars_vals_list in
-      tag_parse (ScmPair(ScmPair(ScmSymbol("lambda"), ScmPair((scheme_sexpr_list_of_sexpr_list vars), exprs)), (scheme_sexpr_list_of_sexpr_list vals)))
+      let (names, values) = let_names_values ribs in
+      let names = scheme_list_of_ocaml_list names ScmNil
+      and values = scheme_list_of_ocaml_list values ScmNil in
+      tag_parse
+        (ScmPair (ScmPair (ScmSymbol "lambda", ScmPair (names, exprs)), values))
     | ScmPair (ScmSymbol "let*", ScmPair (ScmNil, exprs)) ->
       tag_parse (ScmPair(ScmSymbol("let"), ScmPair(ScmNil, exprs)))
     | ScmPair (ScmSymbol "let*",
@@ -928,14 +932,14 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
       | ScmConst sexpr -> ScmConst'(sexpr)
       | ScmVarGet (Var str) -> ScmVarGet'(tag_lexical_address_for_var str params env)
       | ScmIf (test, dit, dif) -> ScmIf'((run test params env), (run dit params env), (run dif params env))
-      | ScmSeq exprs -> ScmSeq'((value -> (run value params env)) exprs)
-      | ScmVarSet(Var v, expr) -> ScmVarSet'(tag_lexList.map (fun expr -> run expr params env) exprs)
-      | ScmOr exprs -> ScmOr'(List.map(fun ical_address_for_var v params env), (run expr params env))
+      | ScmSeq exprs -> ScmSeq'(List.map (fun exp -> run exp params env) exprs)
+      | ScmOr exprs -> ScmOr'(List.map(fun value -> run value params env) exprs)
+      | ScmVarSet(Var v, expr) -> ScmVarSet'((tag_lexical_address_for_var v params env), (run expr params env))
       (* this code does not [yet?] support nested define-expressions *)
       | ScmVarDef(Var v, expr) -> ScmVarDef'((tag_lexical_address_for_var v params env), (run expr params env))
       | ScmLambda (params', Simple, expr) -> ScmLambda'(params', Simple, (run expr params' (params::env)))
       (* the :: adds the params to the env*)
-      | ScmLambda (params', Opt opt, expr) -> ScmLambda'(params', Opt opt, (run expr (params'@[opt]) (params::env)))
+      | ScmLambda (params', Opt opt, expr) -> ScmLambda'(params', Opt opt, (run expr (params'@[opt]) ((params::env))))
       | ScmApplic (proc, args) ->
          ScmApplic' (run proc params env,
                      List.map (fun arg -> run arg params env) args,
@@ -949,18 +953,18 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
     let rec run in_tail = function
       | (ScmConst' _) as orig -> orig
       | (ScmVarGet' _) as orig -> orig
-      | ScmIf' (test, dit, dif) -> ScmIf'((run test false) (run dit in_tail) (run dif in_tail))
-      | ScmSeq' [] -> []
-      | ScmSeq' (expr :: exprs) -> ScmSeq'((List.map(fun value -> (run value false)) expr)@[(run epxrs in_tail)])
-      | ScmOr' [] -> []
-      | ScmOr' (expr :: exprs) -> ScmOr'((List.map(fun value -> (run value false)) expr)@[(run epxrs in_tail)])
-      | ScmVarSet' (var', expr') -> ScmVarSet'(var', (run expr' false))
-      | ScmVarDef' (var', expr') -> ScmVarDef'(var', (run expr' false))
-      | (ScmBox' _) as expr' -> ScmBox'(run expr' false)
-      | (ScmBoxGet' _) as expr' -> ScmBoxGet'(run expr' false)
-      | ScmBoxSet' (var', expr') -> ScmBoxSet'(var, (run expr' false))
-      | ScmLambda' (params, Simple, expr) -> ScmLambda'(params, Simple, (run expr true))
-      | ScmLambda' (params, Opt opt, expr) -> ScmLambda'(params, Opt opt, (run expr true))
+      | ScmIf' (test, dit, dif) -> ScmIf'((run false test), (run in_tail dit), (run in_tail dif))
+      | ScmSeq' [] -> ScmConst'(ScmBoolean(false))
+      | ScmSeq' (expr :: exprs) -> ScmSeq'((List.map(fun value -> (run false value)) exprs)@[(run in_tail expr)])
+      | ScmOr' [] ->  ScmConst'(ScmBoolean(false))
+      | ScmOr' (expr :: exprs) -> ScmOr'((List.map(fun value -> (run false value)) exprs)@[(run in_tail expr)])
+      | ScmVarSet' (var', expr') -> ScmVarSet'(var', (run false expr'))
+      | ScmVarDef' (var', expr') -> ScmVarDef'(var', (run false expr'))
+      | (ScmBox' _) as expr' -> expr'
+      | (ScmBoxGet' _) as expr' -> expr'
+      | ScmBoxSet' (var', expr') -> ScmBoxSet'(var', (run false expr'))
+      | ScmLambda' (params, Simple, expr) -> ScmLambda'(params, Simple, (run true expr))
+      | ScmLambda' (params, Opt opt, expr) -> ScmLambda'(params, Opt opt, (run true expr))
       | ScmApplic' (proc, args, app_kind) ->
          if in_tail
          then ScmApplic' (run false proc,
@@ -973,7 +977,7 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
       | [] -> [run in_tail expr]
       | expr' :: exprs -> (run false expr) :: (runl in_tail expr' exprs)
     in
-    fun expr' -> (run expr' false);;
+    fun expr' -> (run false expr');;
 
   (* auto_box *)
 
@@ -1049,8 +1053,12 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
   let should_box_var name expr params = 
     let (read_lst, write_lst) = find_reads_and_writes name expr params in 
     let cross_read_write = cross_product read_lst write_lst in 
-    let cartesian = List.filter (fun ((n_1, s_1 :: e_1), (n_2, s_2 :: e_2)) -> (not (n_1 == n_2)) || (not (e_1 = e_2))) cross_read_write in 
-    if(List.length cartesian > 0) then true else false;;
+    let cross_read_write = List.filter (fun ((n_1, e1), (n_2, e2)) -> 
+                                                let ribs_pairs = cross_product e1 e2 in 
+                                                let filtered_ribs = List.filter (fun (rib1::rest1,rib2::rest2) -> (not (rib1 == rib2))) ribs_pairs in 
+                                                if(List.length filtered_ribs > 0) then true else false                                   
+      ) cross_read_write in 
+    if(List.length cross_read_write > 0) then true else false;;
 
   let box_sets_and_gets name body =
     let rec run expr =
@@ -1109,9 +1117,9 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
     | ScmIf' (test, dit, dif) ->
        ScmIf' (auto_box test, auto_box dit, auto_box dif)
     | ScmSeq' exprs -> ScmSeq' (List.map auto_box exprs)
-    | ScmVarSet' (v, expr) -> raise X_not_yet_implemented
-    | ScmVarDef' (v, expr) -> raise X_not_yet_implemented
-    | ScmOr' exprs -> raise X_not_yet_implemented
+    | ScmVarSet' (v, expr) -> ScmVarSet'(v, auto_box expr)
+    | ScmVarDef' (v, expr) -> ScmVarDef'(v, auto_box expr)
+    | ScmOr' exprs -> ScmOr'(List.map (fun exp -> (auto_box exp)) exprs)
     | ScmLambda' (params, Simple, expr') ->
        let box_these =
          List.filter
@@ -1130,7 +1138,7 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
          | _, _ -> ScmSeq'(new_sets @ [new_body]) in
        ScmLambda' (params, Simple, new_body)
     | ScmLambda' (params, Opt opt, expr') ->
-       raise X_not_yet_implemented
+      raise X_not_yet_implemented
     | ScmApplic' (proc, args, app_kind) ->
        ScmApplic' (auto_box proc, List.map auto_box args, app_kind);;
 
