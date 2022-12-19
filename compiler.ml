@@ -968,10 +968,10 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
       | (ScmConst' _) as orig -> orig
       | (ScmVarGet' _) as orig -> orig
       | ScmIf' (test, dit, dif) -> ScmIf'((run false test), (run in_tail dit), (run in_tail dif))
-      | ScmSeq' [] -> ScmConst'(ScmBoolean(false))
-      | ScmSeq' (expr :: exprs) -> ScmSeq'((List.map(fun value -> (run false value)) exprs)@[(run in_tail expr)])
-      | ScmOr' [] ->  ScmConst'(ScmBoolean(false))
-      | ScmOr' (expr :: exprs) -> ScmOr'((List.map(fun value -> (run false value)) exprs)@[(run in_tail expr)])
+      | ScmSeq' [] -> ScmSeq'([])
+      | ScmSeq' (expr :: exprs) -> ScmSeq'(runl in_tail expr exprs)
+      | ScmOr' [] ->  ScmOr'([])
+      | ScmOr' (expr :: exprs) -> ScmOr'(runl in_tail expr exprs)
       | ScmVarSet' (var', expr') -> ScmVarSet'(var', (run false expr'))
       | ScmVarDef' (var', expr') -> ScmVarDef'(var', (run false expr'))
       | (ScmBox' _) as expr' -> expr'
