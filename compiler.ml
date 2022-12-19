@@ -631,17 +631,19 @@ module Tag_Parser : TAG_PARSER = struct
                             ScmPair (remaining, ScmNil))))
     | _ -> raise (X_syntax "malformed cond-rib");;
 
-    let let_names_values =
+    let create_let_ribs =
       let rec run = function
         | ScmNil -> ([], [])
-        | ScmPair (ScmPair (name, ScmPair (value, ScmNil)), ribs) ->
-           let (names, values) = run ribs in
-           (name :: names, value :: values)
+        | ScmPair (ScmPair (var_name, ScmPair (var_value, ScmNil)), rest) ->
+           let (vars, values) = run rest in
+           (var_name :: vars, var_value :: values)
         | _ -> raise (X_syntax "Invalid let-rib")
       in run;;
       
     let scheme_list_of_ocaml_list =
       List.fold_right (fun car cdr -> ScmPair (car, cdr));;
+
+
   let rec tag_parse sexpr =
     match sexpr with
     | ScmVoid | ScmBoolean _ | ScmChar _ | ScmString _ | ScmNumber _ ->
@@ -698,7 +700,7 @@ module Tag_Parser : TAG_PARSER = struct
            ScmLambda(unsymbolify_vars params, Opt opt, expr)
         | _ -> raise (X_syntax "invalid parameter list"))
     | ScmPair (ScmSymbol "let", ScmPair (ribs, exprs)) -> 
-      let (names, values) = let_names_values ribs in
+      let (names, values) = create_let_ribs ribs in
       let names = scheme_list_of_ocaml_list names ScmNil
       and values = scheme_list_of_ocaml_list values ScmNil in
       tag_parse
