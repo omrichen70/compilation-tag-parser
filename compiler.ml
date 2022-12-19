@@ -567,11 +567,11 @@ module Tag_Parser : TAG_PARSER = struct
     | ScmVector sexprs ->
        if (list_contains_unquote_splicing sexprs)
        then let sexpr = macro_expand_qq
-                          (scheme_sexpr_list_of_sexpr_list sexprs) in
+                          (Reader.scheme_sexpr_list_of_sexpr_list sexprs) in
             ScmPair (ScmSymbol "list->vector",
                      ScmPair (sexpr, ScmNil))
        else let sexprs = 
-              (scheme_sexpr_list_of_sexpr_list
+              (Reader.scheme_sexpr_list_of_sexpr_list
                  (List.map macro_expand_qq sexprs)) in
             ScmPair (ScmSymbol "vector", sexprs)
     | sexpr -> sexpr;;
@@ -724,7 +724,7 @@ module Tag_Parser : TAG_PARSER = struct
                                     |ScmPair(var, _) -> var
                                     |_ -> raise (X_syntax "invalid letrec expression"))
                             vars_vals_list in 
-      let declaration_vars = List.map (fun var -> ScmPair(var, ScmPair(ScmPair(ScmSymbol("quote"), ScmPair(ScmSymbol("temp"), ScmNil)), ScmNil))) vars in 
+      let declaration_vars = List.map (fun var -> ScmPair(var, ScmPair(ScmPair(ScmSymbol("quote"), ScmPair(ScmSymbol("whatever"), ScmNil)), ScmNil))) vars in 
       let vals = List.map (fun v -> match v with
                                     | ScmPair(_, ScmPair(value, _)) -> value
                                     | _ -> raise (X_syntax "invalid letrec expression")) vars_vals_list in 
@@ -734,7 +734,7 @@ module Tag_Parser : TAG_PARSER = struct
                   |exprs_list, ScmNil -> exprs_list
                   | _ -> raise (X_syntax "improper list") in
       let body = List.append set_args exprs  in
-      tag_parse (ScmPair(ScmSymbol("let"), ScmPair((scheme_sexpr_list_of_sexpr_list declaration_vars), (scheme_sexpr_list_of_sexpr_list body))))
+      tag_parse (ScmPair(ScmSymbol("let"), ScmPair((Reader.scheme_sexpr_list_of_sexpr_list declaration_vars), (Reader.scheme_sexpr_list_of_sexpr_list body))))
     | ScmPair(ScmSymbol "or", ScmNil) -> ScmConst(ScmBoolean(false))
     | ScmPair(ScmSymbol "or", ScmPair(sexpr, ScmNil)) -> tag_parse sexpr
     | ScmPair(ScmSymbol "or", sexprs) ->
@@ -766,7 +766,7 @@ module Tag_Parser : TAG_PARSER = struct
                           "Unknown form: \n%a\n"
                           Reader.sprint_sexpr sexpr));;
 
-  let rec sexpr_of_expr = function
+let rec sexpr_of_expr = function
   | ScmConst(ScmVoid) -> ScmVoid
   | ScmConst((ScmBoolean _) as sexpr) -> sexpr
   | ScmConst((ScmChar _) as sexpr) -> sexpr
@@ -798,13 +798,13 @@ module Tag_Parser : TAG_PARSER = struct
   | ScmOr([expr]) -> sexpr_of_expr expr
   | ScmOr(exprs) ->
       ScmPair (ScmSymbol "or",
-              scheme_sexpr_list_of_sexpr_list
+        Reader.scheme_sexpr_list_of_sexpr_list
                 (List.map sexpr_of_expr exprs))
   | ScmSeq([]) -> ScmVoid
   | ScmSeq([expr]) -> sexpr_of_expr expr
   | ScmSeq(exprs) ->
       ScmPair(ScmSymbol "begin", 
-              scheme_sexpr_list_of_sexpr_list
+        Reader.scheme_sexpr_list_of_sexpr_list
                 (List.map sexpr_of_expr exprs))
   | ScmVarSet(Var var, expr) ->
       let var = ScmSymbol var in
@@ -815,7 +815,7 @@ module Tag_Parser : TAG_PARSER = struct
       let expr = sexpr_of_expr expr in
       ScmPair (ScmSymbol "define", ScmPair (var, ScmPair (expr, ScmNil)))
   | ScmLambda(params, Simple, expr) ->
-      let params = scheme_sexpr_list_of_sexpr_list
+      let params = Reader.scheme_sexpr_list_of_sexpr_list
                     (List.map (fun str -> ScmSymbol str) params) in
       let expr = sexpr_of_expr expr in
       ScmPair (ScmSymbol "lambda",
@@ -838,7 +838,7 @@ module Tag_Parser : TAG_PARSER = struct
         (ScmSymbol "lambda", ScmPair (params, ScmPair (expr, ScmNil)))
   | ScmApplic (ScmLambda (params, Simple, expr), args) ->
       let ribs =
-        scheme_sexpr_list_of_sexpr_list
+        Reader.scheme_sexpr_list_of_sexpr_list
           (List.map2
             (fun param arg -> ScmPair (ScmSymbol param, ScmPair (arg, ScmNil)))
             params
@@ -851,7 +851,7 @@ module Tag_Parser : TAG_PARSER = struct
   | ScmApplic (proc, args) ->
       let proc = sexpr_of_expr proc in
       let args =
-        scheme_sexpr_list_of_sexpr_list
+        Reader.scheme_sexpr_list_of_sexpr_list
           (List.map sexpr_of_expr args) in
       ScmPair (proc, args)
   | _ -> raise (X_syntax "Unknown form");;
@@ -1215,14 +1215,14 @@ let rec sexpr_of_expr' = function
   | ScmOr'([]) -> ScmBoolean false
   | ScmOr'([expr']) -> sexpr_of_expr' expr'
   | ScmOr'(exprs) ->
-    ScmPair (ScmSymbol "or",
-              Reader.scheme_sexpr_list_of_sexpr_list
+     ScmPair (ScmSymbol "or",
+      Reader.scheme_sexpr_list_of_sexpr_list
                 (List.map sexpr_of_expr' exprs))
   | ScmSeq' ([]) -> ScmVoid
   | ScmSeq' ([expr]) -> sexpr_of_expr' expr
   | ScmSeq' (exprs) ->
      ScmPair (ScmSymbol "begin", 
-              Reader.scheme_sexpr_list_of_sexpr_list
+        Reader.scheme_sexpr_list_of_sexpr_list
                 (List.map sexpr_of_expr' exprs))
   | ScmVarSet' (var, expr) ->
      let var = sexpr_of_var' var in
@@ -1269,9 +1269,10 @@ let rec sexpr_of_expr' = function
   | ScmApplic' (proc, args, app_kind) ->
      let proc = sexpr_of_expr' proc in
      let args =
-       Reader.scheme_sexpr_list_of_sexpr_list
+      Reader.scheme_sexpr_list_of_sexpr_list
          (List.map sexpr_of_expr' args) in
      ScmPair (proc, args)
+  (* for reversing macro-expansion... *)
   | _ -> raise X_not_yet_implemented;;
 
 let string_of_expr' expr =
