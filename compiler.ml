@@ -1073,7 +1073,9 @@ module Semantic_Analysis : SEMANTIC_ANALYSIS = struct
           | (Bound(_,_), Bound(_,_)) -> 
             let ribs_pairs = cross_product env1 env2 in 
             let filtered_ribs = List.filter (fun (rib1,rib2) -> (rib1 == rib2)) ribs_pairs in
-            if(List.length filtered_ribs > 0) then false else true) cross_read_write in 
+            if(List.length filtered_ribs > 0) then false else true
+          | _, _ -> false)
+           cross_read_write in 
     if(List.length cross_read_write > 0) then true else false;;
 
 
