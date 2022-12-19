@@ -582,7 +582,7 @@ module Tag_Parser : TAG_PARSER = struct
 
   let rec macro_expand_and_clauses expr = function
     | [] -> expr
-    | expr' :: exprs -> ScmPair(ScmSymbol "if", (ScmPair(expr', ScmPair ((macro_expand_and_clauses expr' exprs), ScmPair(ScmBoolean(false), ScmNil)))));;
+    | expr' :: exprs -> ScmPair(ScmSymbol "if", (ScmPair(expr, ScmPair ((macro_expand_and_clauses expr' exprs), ScmPair(ScmBoolean(false), ScmNil)))));;
 
   let rec macro_expand_cond_ribs ribs =
     match ribs with
