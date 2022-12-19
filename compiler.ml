@@ -162,7 +162,7 @@ module Reader : READER = struct
     let nt1 = caten nt1 nt2 in
     let nt1 = pack nt1
                 (fun (num, den) ->
-                  let d = gcd num den in
+                  let d = gcd (abs num) (abs den) in
                   ScmRational(num / d, den / d)) in
     nt1 str
   and nt_integer_part str =
@@ -794,6 +794,12 @@ module Tag_Parser : TAG_PARSER = struct
       let dif = sexpr_of_expr dif in
       ScmPair
         (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmPair (dif, ScmNil))))
+  | ScmOr([]) -> ScmBoolean false
+  | ScmOr([expr]) -> sexpr_of_expr expr
+  | ScmOr(exprs) ->
+      ScmPair (ScmSymbol "or",
+              scheme_sexpr_list_of_sexpr_list
+                (List.map sexpr_of_expr exprs))
   | ScmSeq([]) -> ScmVoid
   | ScmSeq([expr]) -> sexpr_of_expr expr
   | ScmSeq(exprs) ->
@@ -1206,6 +1212,12 @@ let rec sexpr_of_expr' = function
      let dif = sexpr_of_expr' dif in
      ScmPair
        (ScmSymbol "if", ScmPair (test, ScmPair (dit, ScmPair (dif, ScmNil))))
+  | ScmOr'([]) -> ScmBoolean false
+  | ScmOr'([expr']) -> sexpr_of_expr' expr'
+  | ScmOr'(exprs) ->
+    ScmPair (ScmSymbol "or",
+              Reader.scheme_sexpr_list_of_sexpr_list
+                (List.map sexpr_of_expr' exprs))
   | ScmSeq' ([]) -> ScmVoid
   | ScmSeq' ([expr]) -> sexpr_of_expr' expr
   | ScmSeq' (exprs) ->
