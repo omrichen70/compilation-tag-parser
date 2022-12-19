@@ -41,6 +41,11 @@ end;; (* end of READER signature *)
 module Reader : READER = struct
   open PC;;
 
+  let make_make_skipped_star nt_skip nt =
+    let nt1 = caten nt_skip (caten nt nt_skip) in 
+    let nt1 = pack nt1 (fun (_, (e, _ )) -> e) in
+    nt1;;
+
   type string_part =
     | Static of string
     | Dynamic of sexpr;;
@@ -201,20 +206,19 @@ module Reader : READER = struct
       (function
        | None -> none_value
        | Some(x) -> x)
-  and nt_float str = 
-    let nt_mant = make_maybe nt_mantissa 0.0 in
+  and nt_float str =
+    let nt_dot = char '.' in
+    let nt1 = pack (caten nt_integer_part nt_dot) (fun (num,_) -> num) in
+    let nt_mant = make_maybe nt_mantissa 0.0 in 
+    let nt1 = pack (caten nt1 nt_mant) (fun (int_part,mantis) -> int_part +. mantis) in
     let nt_expo = make_maybe nt_exponent 1.0 in
-    let nt_float_a = caten nt_integer_part (caten (not_followed_by (char '.') (char ' ')) (caten nt_mant nt_expo)) in
-    let nt_float_a = pack nt_float_a 
-                      (fun (integer_part, (dot, (mantissa, exp))) -> (( integer_part +. mantissa ) *. exp)) in
-    let nt_float_b = caten (not_followed_by (char '.') (char ' ')) (caten nt_mant nt_expo) in
-    let nt_float_b = pack nt_float_b 
-                      (fun (dot, (mantissa, exp)) -> mantissa *. exp) in
-    let nt_float_c = caten nt_integer_part nt_exponent in
-    let nt_float_c = pack nt_float_c 
-                      (fun (integer_part, exp) -> integer_part *. exp) in
-    let nt_all_float = caten nt_optional_sign (disj_list [nt_float_a; nt_float_b; nt_float_c]) in
-    let nt_all_float = pack nt_all_float (fun (sign_is_plus, res) -> if sign_is_plus then ScmReal(res) else ScmReal(-. res)) in
+    let nt1 = pack (caten nt1 nt_expo) (fun (float_num,expo) -> float_num *. expo) in
+    let nt2 = pack (caten nt_dot nt_mantissa) (fun (_,mantis) -> mantis) in
+    let nt2 = pack (caten nt2 nt_expo) (fun (mantis,expo)-> mantis *. expo) in
+    let nt3 = pack (caten nt_integer_part nt_exponent) (fun (int_part,expo)-> int_part *. expo) in
+    let nt_all_float = disj_list [nt1;nt2;nt3] in
+    let nt_all_float = pack (caten nt_optional_sign nt_all_float) (fun (opt_sign,float_num) ->
+      if opt_sign then ScmReal float_num else ScmReal (-.float_num)) in
     nt_all_float str
   and nt_number str =
     let nt1 = nt_float in
@@ -355,7 +359,7 @@ module Reader : READER = struct
     nt5 str
   and nt_list str = 
     let nt1 = char '(' in
-    let nt2 = caten nt_skip_star (char ')') in
+    let nt2 = make_make_skipped_star nt_skip_star (char ')') in
     let nt2 = pack nt2 (fun _ -> ScmNil) in
     let nt3 = plus nt_sexpr in
     let nt4 = pack (char ')') (fun _ -> ScmNil) in
@@ -371,7 +375,7 @@ module Reader : READER = struct
     let nt2 = disj nt2 nt7 in
     let nt1 = caten nt1 nt2 in
     let nt1 = pack nt1 (fun (_,sexpr) -> sexpr) in
-    let nt1 = make_skipped_star nt1 in
+    let nt1 = make_make_skipped_star nt_skip_star nt1 in
     nt1 str
   and make_quoted_form nt_qf qf_name =
     let nt1 = caten nt_qf nt_sexpr in
@@ -393,7 +397,7 @@ module Reader : READER = struct
     let nt1 =
       disj_list [nt_void; nt_number; nt_boolean; nt_char; nt_symbol;
                  nt_string; nt_vector; nt_list; nt_quoted_forms] in
-    let nt1 = make_skipped_star nt1 in
+    let nt1 = make_make_skipped_star nt_skip_star nt1 in
     nt1 str;;
 
   let rec string_of_sexpr = function
